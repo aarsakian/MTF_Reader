@@ -12,9 +12,10 @@ type GENERIC_STREAM struct {
 	Data   bytes.Buffer
 }
 
-type DATA_STREAM struct {
-	Header *Stream_Header
-	Data   bytes.Buffer
+type DATA_STREAM struct { //mqda
+	Header        *Stream_Header
+	Data          bytes.Buffer
+	AllocatedSize int
 }
 
 type PAD_STREAM struct {
@@ -129,6 +130,15 @@ func (mtf_tape *MTF_Tape) Parse(data []byte) (int64, error) {
 
 }
 
+func (mtf_tape *MTF_Tape) GetInfo(data []byte) map[string]string {
+	info := map[string]string{}
+	info["MediaName"] = utils.DecodeUTF16(data[mtf_tape.MediaName.Offset : mtf_tape.MediaName.Offset+mtf_tape.MediaName.Size])
+	info["MediaDescription"] = utils.DecodeUTF16(data[mtf_tape.MediaDescription.Offset : mtf_tape.MediaDescription.Offset+mtf_tape.MediaDescription.Size])
+	info["SoftwareName"] = utils.DecodeUTF16(data[mtf_tape.SoftwareName.Offset : mtf_tape.SoftwareName.Offset+mtf_tape.SoftwareName.Size])
+	info["MediaDate"] = mtf_tape.MediaDate.ToString()
+	return info
+}
+
 func (mtf_tape MTF_Tape) getNextOffset() int64 {
 	return int64(mtf_tape.CommonBlockHeader.FirstEventOffset)
 }
@@ -153,6 +163,16 @@ func (mtf_sset *MTF_SSET) Parse(data []byte) (int64, error) {
 	utils.Unmarshal(data[52:98], mtf_sset)
 	mtf_sset.CommonBlockHeader = mtf_db_hdr
 	return mtf_sset.getNextOffset(), nil
+}
+
+func (mtf_sset MTF_SSET) GetInfo(data []byte) map[string]string {
+	info := map[string]string{}
+	info["DataSetName"] = utils.DecodeUTF16(data[mtf_sset.DataSetName.Offset : mtf_sset.DataSetName.Offset+mtf_sset.DataSetName.Size])
+	info["DataSetDescription"] = utils.DecodeUTF16(data[mtf_sset.DataSetDescription.Offset : mtf_sset.DataSetDescription.Offset+mtf_sset.DataSetDescription.Size])
+	info["DataSetPassword"] = utils.DecodeUTF16(data[mtf_sset.DataSetPassword.Offset : mtf_sset.DataSetPassword.Offset+mtf_sset.DataSetPassword.Size])
+	info["UserName"] = utils.DecodeUTF16(data[mtf_sset.UserName.Offset : mtf_sset.UserName.Offset+mtf_sset.UserName.Size])
+	info["MediaWriteDate"] = mtf_sset.MediaWriteDate.ToString()
+	return info
 }
 
 func (mtf_sset MTF_SSET) getNextOffset() int64 {
@@ -209,12 +229,13 @@ func (data_stream *DATA_STREAM) Parse(data []byte) (int64, error) {
 	stream_header := new(Stream_Header)
 	utils.Unmarshal(data[:22], stream_header)
 	data_stream.Header = stream_header
-	data_stream.Data.Grow(int(stream_header.StreamLength))
+	data_stream.AllocatedSize = int(stream_header.StreamLength)
+	data_stream.Data.Grow(int(stream_header.StreamLength)) // does not comply with required size
 	if len(data) >= int(22+stream_header.StreamLength) {
-		data_stream.Data.Write(data[22 : 22+stream_header.StreamLength])
+		data_stream.Data.Write(data[22+2 : 22+stream_header.StreamLength]) //by 2 missed offset
 		return data_stream.getNextOffset(), nil
 	} else {
-		data_stream.Data.Write(data[22:])
+		data_stream.Data.Write(data[22+2:])
 		return int64(len(data)), errors.New("exceeded available buffer")
 	}
 
@@ -224,8 +245,20 @@ func (data_stream DATA_STREAM) getNextOffset() int64 {
 	return int64(data_stream.Header.StreamLength) + 22
 }
 
-func (data_stream *DATA_STREAM) AppendData(data []byte) {
-	data_stream.Data.Write(data)
+func (data_stream *DATA_STREAM) AppendData(data []byte) int64 {
+	if data_stream.AllocatedSize-data_stream.Data.Len() > len(data) {
+		data_stream.Data.Write(data)
+		return int64(len(data))
+	} else {
+		actualBytesWritten := data_stream.AllocatedSize - data_stream.Data.Len() - 2 //tocheck
+		data_stream.Data.Write(data[:actualBytesWritten])
+		return int64(actualBytesWritten)
+	}
+
+}
+
+func (data_stream DATA_STREAM) IsFull() bool {
+	return data_stream.Data.Cap() == data_stream.Data.Len()
 }
 
 func (raid_stream *RAID_STREAM) Parse(data []byte) (int64, error) {
