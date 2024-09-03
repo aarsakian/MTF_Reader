@@ -4,7 +4,13 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"math"
 	"reflect"
+	"strconv"
+	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 type MTF_DATE_TIME struct {
@@ -14,6 +20,48 @@ type MTF_DATE_TIME struct {
 type MTF_TAPE_ADDRESS struct {
 	Size   uint16
 	Offset uint16
+}
+
+func (mtf_date_time MTF_DATE_TIME) ToString() string {
+	bitrepresentation := strings.Builder{}
+	bitrepresentation.Grow(8 * len(mtf_date_time.Content))
+	//mtf_date_time.Content = [5]byte{0x1f, 0x33, 0x3f, 0x81, 0xde} //testing
+	for _, val := range mtf_date_time.Content {
+
+		bitrepresentation.WriteString(AddMissingBits(strconv.FormatUint(uint64(val), 2), 8))
+	}
+	year := 0
+	bitrepresentationStr := bitrepresentation.String()
+	for bitpos := range bitrepresentationStr[:14] {
+		year += (int(bitrepresentationStr[14-bitpos-1]) - 48) * int(math.Exp2(float64(bitpos)))
+	}
+
+	month := 0
+	for bitpos := range bitrepresentation.String()[14:18] {
+		month += (int(bitrepresentationStr[18-bitpos-1]) - 48) * int(math.Exp2(float64(bitpos)))
+	}
+
+	day := 0
+	for bitpos := range bitrepresentation.String()[18:23] {
+		day += (int(bitrepresentationStr[23-bitpos-1]) - 48) * int(math.Exp2(float64(bitpos)))
+	}
+
+	hour := 0
+	for bitpos := range bitrepresentation.String()[23:28] {
+		hour += (int(bitrepresentationStr[28-bitpos-1]) - 48) * int(math.Exp2(float64(bitpos)))
+	}
+
+	minute := 0
+	for bitpos := range bitrepresentation.String()[28:34] {
+		minute += (int(bitrepresentationStr[34-bitpos-1]) - 48) * int(math.Exp2(float64(bitpos)))
+	}
+	seconds := 0
+	for bitpos := range bitrepresentation.String()[34:40] {
+		seconds += (int(bitrepresentationStr[40-bitpos-1]) - 48) * int(math.Exp2(float64(bitpos)))
+	}
+
+	return fmt.Sprintf("%d/%d/%d %d:%d:%d", day, month, year, hour, minute, seconds)
+
 }
 
 func ReadEndianInt(barray []byte) int64 {
@@ -124,4 +172,25 @@ func Bytereverse(barray []byte) []byte { //work with indexes
 	}
 	return barray
 
+}
+
+func DecodeUTF16(b []byte) string {
+	utf := make([]uint16, (len(b)+(2-1))/2) // utf-16 2 bytes for each char
+	for i := 0; i+(2-1) < len(b); i += 2 {
+		utf[i/2] = binary.LittleEndian.Uint16(b[i:])
+	}
+	if len(b)/2 < len(utf) { // the "error" Rune or "Unicode replacement character"
+		utf[len(utf)-1] = utf8.RuneError
+	}
+	return string(utf16.Decode(utf))
+
+}
+
+func AddMissingBits(bitval string, targetLen int) string {
+	// add missing zeros
+
+	for len(bitval) < targetLen {
+		bitval = "0" + bitval
+	}
+	return bitval
 }
