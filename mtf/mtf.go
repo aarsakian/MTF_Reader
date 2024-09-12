@@ -190,7 +190,11 @@ func (dataset DataSet) IsFull() bool {
 }
 
 func (mtf MTF) GetExportFileName() string {
-	return strings.Replace(mtf.DataSet.Info["DataSetName"], " ", "_", -1) + ".mdf"
+	return mtf.DataSet.GetExportName()
+}
+
+func (dataset DataSet) GetExportName() string {
+	return strings.Replace(dataset.Info["DataSetName"], " ", "_", -1) + ".mdf"
 }
 
 func (dataset DataSet) Export(exportPath string) int {
@@ -202,7 +206,7 @@ func (dataset DataSet) Export(exportPath string) int {
 	}
 	var fhandler *os.File
 	nofBytesWritten := 0
-	exportName := strings.Replace(dataset.Info["DataSetName"], " ", "_", -1) + ".mdf"
+	exportName := dataset.GetExportName()
 	fhandler, err = os.Create(filepath.Join(exportPath, exportName))
 
 	if err != nil {
@@ -213,7 +217,7 @@ func (dataset DataSet) Export(exportPath string) int {
 	if err != nil {
 		log.Fatal(err)
 	}
-	msg := fmt.Sprintf("Exported %s to %s", exportPath, exportName)
+	msg := fmt.Sprintf("Exported %s to %s", exportName, exportPath)
 	logger.MTFlogger.Info(msg)
 	fmt.Printf(msg + "\n")
 
