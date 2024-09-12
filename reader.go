@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"time"
 
 	"github.com/aarsakian/MTF_Reader/logger"
@@ -28,7 +29,8 @@ func main() {
 	}
 
 	if *exportPath != "" {
-		mtf_s.Export(*exportPath)
+		nofBytesWritten := mtf_s.Export(*exportPath)
+		fmt.Printf("Written %d\n", nofBytesWritten)
 	}
 
 }

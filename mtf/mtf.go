@@ -37,8 +37,8 @@ func (mtf MTF) ShowInfo() {
 	mtf.DataSet.showInfo()
 }
 
-func (mtf MTF) Export(exportPath string) {
-	mtf.DataSet.Export(exportPath)
+func (mtf MTF) Export(exportPath string) int {
+	return mtf.DataSet.Export(exportPath)
 }
 
 func (mtf *MTF) Process() {
@@ -202,9 +202,9 @@ func (dataset DataSet) Export(exportPath string) int {
 	}
 	var fhandler *os.File
 	nofBytesWritten := 0
+	exportName := strings.Replace(dataset.Info["DataSetName"], " ", "_", -1) + ".mdf"
+	fhandler, err = os.Create(filepath.Join(exportPath, exportName))
 
-	fhandler, err = os.Create(filepath.Join(
-		strings.Replace(dataset.Info["DataSetName"], " ", "_", -1) + ".mdf"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -213,7 +213,10 @@ func (dataset DataSet) Export(exportPath string) int {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Written %d\n", nofBytesWritten)
+	msg := fmt.Sprintf("Exported %s to %s", exportPath, exportName)
+	logger.MTFlogger.Info(msg)
+	fmt.Printf(msg + "\n")
+
 	return nofBytesWritten
 }
 
