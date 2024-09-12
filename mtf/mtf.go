@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/aarsakian/MTF_Reader/dblk"
 	"github.com/aarsakian/MTF_Reader/logger"
@@ -35,8 +37,8 @@ func (mtf MTF) ShowInfo() {
 	mtf.DataSet.showInfo()
 }
 
-func (mtf MTF) Export() {
-	mtf.DataSet.Export()
+func (mtf MTF) Export(exportPath string) {
+	mtf.DataSet.Export(exportPath)
 }
 
 func (mtf *MTF) Process() {
@@ -187,11 +189,22 @@ func (dataset DataSet) IsFull() bool {
 	return dataset.Data_stream.IsFull()
 }
 
-func (dataset DataSet) Export() {
+func (mtf MTF) GetExportFileName() string {
+	return strings.Replace(mtf.DataSet.Info["DataSetName"], " ", "_", -1) + ".mdf"
+}
+
+func (dataset DataSet) Export(exportPath string) int {
 	var err error
+
+	err = os.Mkdir(exportPath, 0750)
+	if err != nil && !os.IsExist(err) {
+		log.Fatal(err)
+	}
 	var fhandler *os.File
 	nofBytesWritten := 0
-	fhandler, err = os.Create(dataset.Info["DataSetName"])
+
+	fhandler, err = os.Create(filepath.Join(
+		strings.Replace(dataset.Info["DataSetName"], " ", "_", -1) + ".mdf"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -201,6 +214,7 @@ func (dataset DataSet) Export() {
 		log.Fatal(err)
 	}
 	fmt.Printf("Written %d\n", nofBytesWritten)
+	return nofBytesWritten
 }
 
 func (media_header Media_Header) showInfo() {

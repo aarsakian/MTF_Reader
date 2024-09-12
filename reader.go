@@ -12,7 +12,7 @@ func main() {
 	filePath := flag.String("mtf", "", "path to microsoft tape archive")
 	loggerActive := flag.Bool("log", false, "enable logging")
 	info := flag.Bool("info", false, "show info about the tape file")
-	export := flag.Bool("export", false, "export data set of the tape file")
+	exportPath := flag.String("export", "", "export path of the data set of the tape file")
 
 	flag.Parse()
 
@@ -27,8 +27,8 @@ func main() {
 		mtf_s.ShowInfo()
 	}
 
-	if *export {
-		mtf_s.Export()
+	if *exportPath != "" {
+		mtf_s.Export(*exportPath)
 	}
 
 }
