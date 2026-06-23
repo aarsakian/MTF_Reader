@@ -71,7 +71,11 @@ func (mtf *MTF) Process() {
 
 		innerOffset := int64(0)
 		for innerOffset < int64(len(buffer)) {
-			if string(buffer[innerOffset:innerOffset+4]) == "TAPE" {
+			if innerOffset+4 > int64(len(buffer)) {
+				break
+			}
+			header := string(buffer[innerOffset : innerOffset+4])
+			if header == "TAPE" {
 
 				mtf_tape := new(dblk.MTF_Tape)
 				next_offset, err := mtf_tape.Parse(buffer[innerOffset:])
@@ -156,7 +160,7 @@ func (mtf *MTF) Process() {
 					break
 				}
 
-			} else if string(buffer[innerOffset:innerOffset+4]) == "MQDA" {
+			} else if header == "MQDA" {
 				data_stream := new(dblk.DATA_STREAM)
 				next_offset, err := data_stream.Parse(buffer[innerOffset:])
 
@@ -166,8 +170,13 @@ func (mtf *MTF) Process() {
 					latest_attribute = "MQDA"
 					break
 				}
-			} else if latest_attribute == "MQDA" && !data_set.IsFull() { //break
-				innerOffset += data_set.AppendData(buffer)
+			} else if latest_attribute == "MQDA" && !data_set.IsFull() {
+				remaining := int64(len(buffer)) - innerOffset
+				if remaining <= 0 {
+					break
+				}
+				written := data_set.AppendData(buffer[innerOffset:])
+				innerOffset += written
 
 			} else {
 				innerOffset += 1 //brute force search alignment??
