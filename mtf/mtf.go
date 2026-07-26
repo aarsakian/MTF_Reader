@@ -11,6 +11,8 @@ import (
 	"github.com/aarsakian/MTF_Reader/logger"
 )
 
+const BUF_SIZE = 100000 * 1024
+
 type MTF struct {
 	MediaHeader *Media_Header
 	DataSet     *DataSet
@@ -42,6 +44,8 @@ func (mtf MTF) Export(exportPath string) int {
 }
 
 func (mtf *MTF) Process() {
+	var buffer []byte
+
 	fhadler, err := os.Open(mtf.Fname)
 	if err != nil {
 
@@ -50,12 +54,15 @@ func (mtf *MTF) Process() {
 
 	offset := int64(0)
 
-	buffer := make([]byte, 100000*1024)
-
 	fsize, err := fhadler.Stat()
 	if err != nil {
 		logger.MTFlogger.Error(err)
 
+	}
+	if fsize.Size() < BUF_SIZE {
+		buffer = make([]byte, fsize.Size())
+	} else {
+		buffer = make([]byte, BUF_SIZE)
 	}
 
 	media_header := new(Media_Header)
@@ -180,7 +187,7 @@ func (mtf *MTF) Process() {
 
 			} else {
 				innerOffset += 1 //brute force search alignment??
-				logger.MTFlogger.Warning(fmt.Sprintf("Bruteforcing %d", offset))
+				logger.MTFlogger.Warning(fmt.Sprintf("Searching for signatures %d", offset))
 			}
 		}
 		offset += innerOffset
@@ -221,7 +228,9 @@ func (dataset DataSet) Export(exportPath string) int {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	if dataset.Data_stream == nil {
+		log.Fatal("no data stream found")
+	}
 	nofBytesWritten, err = fhandler.Write(dataset.Data_stream.Data.Bytes())
 	if err != nil {
 		log.Fatal(err)
