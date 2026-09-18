@@ -2,10 +2,17 @@ package dblk
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 
 	"github.com/aarsakian/MTF_Reader/utils"
 )
+
+const DBLK_HDR_LEN = 52
+const STREAM_HDR_LEN = 22
+
+// MQDA payload starts 2 bytes after the stream header
+const DATA_STREAM_START = 24
 
 type GENERIC_STREAM struct {
 	Header *Stream_Header
@@ -117,6 +124,37 @@ type MTF_VOLB struct {
 
 func (mtf_db_hdr MTF_DB_HDR) GetDBLKTypeStr() string {
 	return string(mtf_db_hdr.DBLKType[:])
+}
+
+// xor of the 16-bit words preceding the checksum field
+func headerChecksum(data []byte, checksumOffset int) uint16 {
+	var checksum uint16
+	for i := 0; i < checksumOffset; i += 2 {
+		checksum ^= binary.LittleEndian.Uint16(data[i:])
+	}
+	return checksum
+}
+
+// IsValidDBLKHeader tells a real descriptor block apart from its type name
+// occurring by chance inside other data.
+func IsValidDBLKHeader(data []byte) bool {
+	if len(data) < DBLK_HDR_LEN {
+		return false
+	}
+	return headerChecksum(data, 50) == binary.LittleEndian.Uint16(data[50:])
+}
+
+// IsValidStreamHeader tells a real stream header apart from its id occurring by
+// chance inside other data.
+func IsValidStreamHeader(data []byte) bool {
+	if len(data) < STREAM_HDR_LEN {
+		return false
+	}
+	return headerChecksum(data, 20) == binary.LittleEndian.Uint16(data[20:])
+}
+
+func GetStreamLength(data []byte) int64 {
+	return int64(binary.LittleEndian.Uint64(data[8:]))
 }
 
 func safeUTF16String(data []byte, offset, size uint16) string {
@@ -276,10 +314,11 @@ func (data_stream *DATA_STREAM) Parse(data []byte) (int64, error) {
 		return 0, err
 	}
 	data_stream.Header = stream_header
-	data_stream.AllocatedSize = int(stream_header.StreamLength)
-	data_stream.Data.Grow(int(stream_header.StreamLength)) // does not comply with required size
-	start := 24
+	start := DATA_STREAM_START
 	end := int(22 + stream_header.StreamLength)
+	// size of the payload copied, so that IsFull and AppendData agree with the bytes written here
+	data_stream.AllocatedSize = max(end-start, 0)
+	data_stream.Data.Grow(data_stream.AllocatedSize)
 	if start > len(data) {
 		return int64(len(data)), errors.New("insufficient stream payload")
 	}
@@ -317,8 +356,9 @@ func (data_stream *DATA_STREAM) AppendData(data []byte) int64 {
 	return int64(actualBytesWritten)
 }
 
+// Cap() can exceed the requested size after Grow, so compare against the payload size
 func (data_stream DATA_STREAM) IsFull() bool {
-	return data_stream.Data.Cap() == data_stream.Data.Len()
+	return data_stream.Data.Len() >= data_stream.AllocatedSize
 }
 
 func (raid_stream *RAID_STREAM) Parse(data []byte) (int64, error) {
